@@ -1,0 +1,126 @@
+#!/bin/bash
+
+set -o pipefail
+
+action=${1:-}
+account_name=${2:-}
+network_profile=${3:-SoftEther VPN Network}
+adapter_name=${4:-vpn_vpn}
+runtime_root=${XDG_RUNTIME_DIR:-/run/user/$UID}
+route_state_dir="$runtime_root/softether-vpn"
+route_state_file="$route_state_dir/transport-route"
+
+fail() {
+  echo "SoftEther VPN: $*" >&2
+  exit 1
+}
+
+vpn_command() {
+  timeout 15 vpncmd localhost /CLIENT /CMD "$@"
+}
+
+cleanup_transport_route() {
+  [[ -f $route_state_file ]] || return 0
+
+  while IFS='|' read -r device gateway address; do
+    [[ -n $device && -n $gateway && -n $address ]] || continue
+    nmcli device modify "$device" -ipv4.routes "$address/32 $gateway" >/dev/null 2>&1 || true
+  done < "$route_state_file"
+
+  rm -f -- "$route_state_file"
+}
+
+prepare_transport_route() {
+  local account_output server_host physical_route physical_gateway physical_device address
+  local -a server_addresses=()
+
+  # The VPN server itself must stay on the physical network after the tunnel
+  # becomes the default route, otherwise the tunnel tries to carry its own
+  # transport connection and collapses a few seconds after connecting.
+  account_output=$(vpn_command AccountGet "$account_name") \
+    || fail "could not read '$account_name'"
+  server_host=$(awk -F '|' '
+    /^Destination VPN Server Host Name/ {
+      value=$2
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      print value
+      exit
+    }
+  ' <<< "$account_output")
+  [[ -n $server_host ]] || fail "could not determine the VPN server for '$account_name'"
+
+  physical_route=$(ip -4 route show default | awk -v vpn_device="$adapter_name" '
+    {
+      gateway=""
+      device=""
+      for (i=1; i<=NF; i++) {
+        if ($i == "via") gateway=$(i+1)
+        if ($i == "dev") device=$(i+1)
+      }
+      if (device != "" && device != vpn_device && gateway != "") {
+        print gateway, device
+        exit
+      }
+    }
+  ')
+  read -r physical_gateway physical_device <<< "$physical_route"
+  [[ -n $physical_gateway && -n $physical_device ]] \
+    || fail "no physical IPv4 default route is available"
+
+  mapfile -t server_addresses < <(getent ahostsv4 "$server_host" | awk '
+    $2 == "STREAM" && $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && !seen[$1]++ { print $1 }
+  ')
+  ((${#server_addresses[@]} > 0)) || fail "could not resolve '$server_host'"
+
+  cleanup_transport_route
+  install -d -m 700 "$route_state_dir"
+  : > "$route_state_file"
+  chmod 600 "$route_state_file"
+
+  for address in "${server_addresses[@]}"; do
+    if ! nmcli device modify "$physical_device" +ipv4.routes "$address/32 $physical_gateway" >/dev/null; then
+      cleanup_transport_route
+      fail "could not protect the route to '$server_host'"
+    fi
+    printf '%s|%s|%s\n' "$physical_device" "$physical_gateway" "$address" >> "$route_state_file"
+  done
+}
+
+connection_started=false
+cleanup_failed_connection() {
+  if [[ $connection_started == true ]]; then
+    nmcli --wait 5 connection down id "$network_profile" >/dev/null 2>&1 || true
+    vpn_command AccountDisconnect "$account_name" >/dev/null 2>&1 || true
+  fi
+  cleanup_transport_route
+}
+
+[[ $action == connect || $action == disconnect ]] || fail "expected connect or disconnect"
+[[ -n $account_name ]] || fail "no VPN account was selected"
+command -v vpncmd >/dev/null 2>&1 || fail "vpncmd is not installed"
+command -v nmcli >/dev/null 2>&1 || fail "NetworkManager is not installed"
+nmcli connection show id "$network_profile" >/dev/null 2>&1 \
+  || fail "NetworkManager profile '$network_profile' is missing"
+
+if [[ $action == connect ]]; then
+  trap cleanup_failed_connection EXIT INT TERM
+  prepare_transport_route
+  vpn_command AccountConnect "$account_name" || fail "could not start '$account_name'"
+  connection_started=true
+
+  # SoftEther opens the layer-2 path asynchronously. NetworkManager's DHCP
+  # activation naturally waits until the virtual hub begins forwarding frames.
+  if ! timeout 50 nmcli --wait 45 connection up id "$network_profile" ifname "$adapter_name"; then
+    fail "the tunnel opened, but DHCP/routing on '$adapter_name' did not complete"
+  fi
+  connection_started=false
+  trap - EXIT INT TERM
+else
+  # Remove the VPN default route before tearing down the layer-2 tunnel, so the
+  # physical connection becomes the default path without a dead-route window.
+  nmcli --wait 10 connection down id "$network_profile" >/dev/null 2>&1 || true
+  disconnect_failed=false
+  vpn_command AccountDisconnect "$account_name" || disconnect_failed=true
+  cleanup_transport_route
+  [[ $disconnect_failed == false ]] || fail "could not disconnect '$account_name'"
+fi
