@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "CountryLookup.js" as CountryLookup
 import "Model.js" as Model
 
 Item {
@@ -234,7 +235,14 @@ Item {
       var stderr = String(accountsStderr.text || root._accountsError || "")
       if (exitCode === 0) {
         root.serviceAvailable = true
-        root.accounts = Model.parseAccountList(stdout)
+        var parsedAccounts = Model.parseAccountList(stdout)
+        for (var i = 0; i < parsedAccounts.length; i++) {
+          var country = CountryLookup.countryDetails(parsedAccounts[i].name)
+          parsedAccounts[i].country = country.label
+          parsedAccounts[i].countryCode = country.code
+          parsedAccounts[i].flag = country.flag
+        }
+        root.accounts = parsedAccounts
         root.choosePreferredAccount()
         if (root.lastError.indexOf("service") !== -1) root.lastError = ""
         if (root.desiredState === 1 && root.activeAccount) root.desiredState = -1

@@ -20,14 +20,6 @@ function statusKind(value) {
   return status === "" ? "offline" : "unknown"
 }
 
-function countryLabel(accountName) {
-  var name = decoded(accountName)
-  var pieces = name.split(/\s+-\s+/)
-  if (pieces.length > 1 && pieces[pieces.length - 1].trim() !== "")
-    return pieces[pieces.length - 1].trim()
-  return name || "Unknown"
-}
-
 function parseAccountList(raw) {
   var lines = String(raw || "").split(/\r?\n/)
   var accounts = []
@@ -35,7 +27,6 @@ function parseAccountList(raw) {
 
   function finish() {
     if (!current || !current.name) return
-    current.country = countryLabel(current.name)
     current.statusKind = statusKind(current.status)
     accounts.push(current)
   }
@@ -95,7 +86,6 @@ if (typeof module !== "undefined") {
     decoded: decoded,
     tableRow: tableRow,
     statusKind: statusKind,
-    countryLabel: countryLabel,
     parseAccountList: parseAccountList,
     parseAddress: parseAddress,
     hasDefaultRoute: hasDefaultRoute

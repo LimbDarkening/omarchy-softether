@@ -20,7 +20,8 @@ Panel {
   readonly property color urgent: bar ? bar.urgent : Color.urgent
   readonly property color dim: Qt.darker(foreground, 1.55)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
-  readonly property string selectedFlag: countryFlag(vpn.country)
+  readonly property string selectedFlag: vpn.selectedAccount
+    ? String(vpn.selectedAccount.flag || "🏳") : "🏳"
   readonly property color iconColor: {
     if (vpn.state === "error" || vpn.state === "warning") return urgent
     if (vpn.state === "off") return Qt.darker(barForeground, 1.55)
@@ -30,15 +31,6 @@ Panel {
   function clampIndex() {
     if (vpn.accounts.length === 0) accountIndex = 0
     else accountIndex = Math.max(0, Math.min(vpn.accounts.length - 1, accountIndex))
-  }
-
-  function countryFlag(country) {
-    var normalized = String(country || "").trim().toLowerCase()
-    if (normalized === "netherlands") return "🇳🇱"
-    if (normalized === "singapore") return "🇸🇬"
-    if (normalized === "united kingdom" || normalized === "uk" || normalized === "great britain") return "🇬🇧"
-    if (normalized === "united states" || normalized === "us" || normalized === "usa") return "🇺🇸"
-    return "🏳"
   }
 
   function selectedRow() {
@@ -329,7 +321,7 @@ Panel {
 
                     Text {
                       Layout.fillWidth: true
-                      text: root.countryFlag(accountRow.account.country) + "  " + accountRow.account.country
+                      text: String(accountRow.account.flag || "🏳") + "  " + accountRow.account.country
                       color: root.foreground
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.body

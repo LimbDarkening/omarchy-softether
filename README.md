@@ -8,6 +8,8 @@ accounts.
 - Left-click to connect or disconnect the selected account.
 - Right-click to choose an imported account.
 - Middle-click to refresh the current status.
+- Recognizes country names and common aliases anywhere in account names and
+  renders the corresponding flag without network lookups.
 - Reports the VPN as usable only after SoftEther is connected, the virtual
   adapter has an address, and the adapter owns a default route.
 - Protects the VPN server's physical route before making the tunnel the default
