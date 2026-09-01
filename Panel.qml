@@ -117,6 +117,7 @@ Panel {
             color: root.iconColor
             badgeColor: root.urgent
             state: vpn.state
+            pulsing: vpn.connectAnimationActive
           }
 
           Text {
@@ -206,6 +207,7 @@ Panel {
               color: root.iconColor
               badgeColor: root.urgent
               state: vpn.state
+              pulsing: vpn.connectAnimationActive
               Layout.alignment: Qt.AlignVCenter
             }
 

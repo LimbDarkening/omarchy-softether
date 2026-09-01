@@ -8,6 +8,7 @@ Item {
   property color color: Color.foreground
   property color badgeColor: Color.urgent
   property string state: "off"
+  property bool pulsing: false
 
   width: iconSize
   height: iconSize
@@ -17,7 +18,8 @@ Item {
   Canvas {
     id: shield
     anchors.fill: parent
-    opacity: root.state === "off" ? 0.52 : 1.0
+    property real pulseOpacity: 1.0
+    opacity: root.state === "off" ? 0.52 : (root.pulsing ? pulseOpacity : 1.0)
 
     onPaint: {
       var ctx = getContext("2d")
@@ -52,11 +54,11 @@ Item {
       function onStateChanged() { shield.requestPaint() }
     }
 
-    SequentialAnimation on opacity {
-      running: root.state === "connecting"
+    SequentialAnimation on pulseOpacity {
+      running: root.pulsing
       loops: Animation.Infinite
-      NumberAnimation { to: 0.38; duration: 520; easing.type: Easing.InOutQuad }
-      NumberAnimation { to: 1.0; duration: 520; easing.type: Easing.InOutQuad }
+      NumberAnimation { from: 1.0; to: 0.38; duration: 520; easing.type: Easing.InOutQuad }
+      NumberAnimation { from: 0.38; to: 1.0; duration: 520; easing.type: Easing.InOutQuad }
     }
   }
 

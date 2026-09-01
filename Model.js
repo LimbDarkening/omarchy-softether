@@ -20,6 +20,26 @@ function statusKind(value) {
   return status === "" ? "offline" : "unknown"
 }
 
+function presentationState(options) {
+  var state = options || {}
+  if (!state.installed || !state.serviceAvailable) return "error"
+  if (String(state.lastError || "") !== "") return "error"
+
+  // A requested disconnect is optimistically off. NetworkManager removes the
+  // address and route before AccountList reports Offline, and treating that
+  // expected gap as an unusable connection produces a false warning badge.
+  if (state.desiredState === 0 || state.actionKind === "disconnect") return "off"
+  if (state.actionKind === "connect" || state.desiredState === 1 || state.connecting)
+    return "connecting"
+  if (state.connected && !state.usable) return "warning"
+  if (state.connected) return "on"
+  return "off"
+}
+
+function shouldPulse(actionKind) {
+  return String(actionKind || "") === "connect"
+}
+
 function parseAccountList(raw) {
   var lines = String(raw || "").split(/\r?\n/)
   var accounts = []
@@ -86,6 +106,8 @@ if (typeof module !== "undefined") {
     decoded: decoded,
     tableRow: tableRow,
     statusKind: statusKind,
+    presentationState: presentationState,
+    shouldPulse: shouldPulse,
     parseAccountList: parseAccountList,
     parseAddress: parseAddress,
     hasDefaultRoute: hasDefaultRoute

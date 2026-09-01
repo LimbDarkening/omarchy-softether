@@ -35,15 +35,18 @@ Item {
   readonly property var activeAccount: connectedAccount || connectingAccount
   readonly property bool active: desiredState === -1 ? activeAccount !== null : desiredState === 1
   readonly property bool usable: connectedAccount !== null && tunnelAddress !== "" && hasVpnDefaultRoute
+  readonly property bool connectAnimationActive: Model.shouldPulse(actionKind)
   readonly property string country: selectedAccount ? selectedAccount.country : "VPN"
-  readonly property string state: {
-    if (!installed || !serviceAvailable) return "error"
-    if (lastError !== "") return "error"
-    if (busy || desiredState === 1 || connectingAccount) return "connecting"
-    if (connectedAccount && !usable) return "warning"
-    if (connectedAccount) return "on"
-    return "off"
-  }
+  readonly property string state: Model.presentationState({
+    installed: installed,
+    serviceAvailable: serviceAvailable,
+    lastError: lastError,
+    actionKind: actionKind,
+    desiredState: desiredState,
+    connecting: connectingAccount !== null,
+    connected: connectedAccount !== null,
+    usable: usable
+  })
   readonly property string statusText: {
     if (!installed) return "SoftEther is not installed"
     if (!serviceAvailable) return "SoftEther client service is stopped"

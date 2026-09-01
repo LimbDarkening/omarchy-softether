@@ -5,8 +5,8 @@ accounts.
 
 ## Features
 
-- Left-click to connect or disconnect the selected account.
-- Right-click to choose an imported account.
+- Left-click the shield to connect or disconnect the selected account.
+- Left-click the flag, or right-click the widget, to choose an imported account.
 - Middle-click to refresh the current status.
 - Recognizes country names and common aliases anywhere in account names and
   renders the corresponding flag without network lookups.
@@ -20,6 +20,8 @@ accounts.
 - Omarchy 4 or later.
 - SoftEther VPN Client with `vpncmd` available on `PATH`.
 - NetworkManager and `nmcli`.
+- `ip` from `iproute2`, plus the standard `timeout`, `getent`, and `awk`
+  command-line tools included with Omarchy.
 - At least one account already imported into SoftEther VPN Client.
 - A SoftEther virtual adapter and a matching NetworkManager TAP profile.
 
@@ -35,8 +37,6 @@ nmcli connection add type tun ifname vpn_vpn \
 Both names can be changed later in the widget settings.
 
 ## Installation
-
-After this repository is public:
 
 ```bash
 omarchy plugin add https://github.com/limbdarkening/omarchy-softether.git --enable
