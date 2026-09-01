@@ -319,7 +319,7 @@ var COUNTRY_LABELS = {
 }
 
 function decoded(value) {
-  return String(value || "").replace(/\$20/g, " ").trim()
+  return String(value || "").substring(0, 128).replace(/\$20/g, " ").trim()
 }
 
 function normalizedWords(value) {
@@ -384,7 +384,7 @@ function inferredDefinition(accountName) {
       return { code: candidate.code, label: candidate.label }
   }
 
-  var tokens = String(accountName || "").split(/[^A-Za-z]+/)
+  var tokens = String(accountName || "").substring(0, 128).split(/[^A-Za-z]+/)
   for (var j = 0; j < tokens.length; j++) {
     if (/^[A-Z]{2}$/.test(tokens[j])) {
       var definition = definitionForCode(tokens[j])

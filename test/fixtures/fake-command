@@ -1,0 +1,60 @@
+#!/bin/bash
+
+set -o errexit
+set -o nounset
+
+command_name=${0##*/}
+
+case "$command_name" in
+  vpncmd)
+    if [[ ${FAKE_TERM_RESISTANT:-0} == 1 ]]; then
+      trap '' TERM
+      sleep 20
+      exit 0
+    fi
+    if [[ " $* " == *" AccountList "* ]]; then
+      if [[ ${FAKE_OVERSIZED_OUTPUT:-0} == 1 ]]; then
+        yes A | head -c 70000
+      elif [[ ${FAKE_EXCESS_LINES:-0} == 1 ]]; then
+        for ((line = 0; line < 1100; line++)); do
+          printf 'ignored\n'
+        done
+      else
+        printf '%s\n' \
+          'VPN Connection Setting Name | Test VPN Germany' \
+          'Status | Offline' \
+          'VPN Server Hostname | vpn.example.com'
+      fi
+    elif [[ " $* " == *" AccountGet "* ]]; then
+      printf '%s\n' 'Destination VPN Server Host Name | vpn.example.com'
+    fi
+    ;;
+  ip)
+    if [[ " $* " == *" -j address "* ]]; then
+      printf '%s\n' '[{"addr_info":[{"scope":"global","family":"inet","local":"10.0.0.2"}]}]'
+    elif [[ " $* " == *" -j route "* ]]; then
+      printf '%s\n' '[{"dst":"default","dev":"vpn_vpn"}]'
+    else
+      printf '%s\n' 'default via 192.0.2.1 dev eth0 proto dhcp'
+    fi
+    ;;
+  getent)
+    printf '%s\n' \
+      '198.51.100.10 STREAM vpn.example.com' \
+      '198.51.100.10 DGRAM vpn.example.com'
+    ;;
+  nmcli)
+    if [[ -n ${FAKE_COMMAND_LOG:-} ]]; then
+      printf 'nmcli' >> "$FAKE_COMMAND_LOG"
+      printf ' <%s>' "$@" >> "$FAKE_COMMAND_LOG"
+      printf '\n' >> "$FAKE_COMMAND_LOG"
+    fi
+    if [[ ${FAKE_CONNECTION_DELAY:-0} != 0 && " $* " == *" connection up "* ]]; then
+      sleep "$FAKE_CONNECTION_DELAY"
+    fi
+    ;;
+  *)
+    printf 'unexpected fake command: %s\n' "$command_name" >&2
+    exit 1
+    ;;
+esac

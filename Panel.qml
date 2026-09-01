@@ -123,6 +123,7 @@ Panel {
           Text {
             anchors.verticalCenter: parent.verticalCenter
             text: root.selectedFlag
+            textFormat: Text.PlainText
             color: root.foreground
             font.family: "Noto Color Emoji"
             font.pixelSize: Style.space(13)
@@ -218,6 +219,7 @@ Panel {
               Text {
                 Layout.fillWidth: true
                 text: root.selectedFlag + "  " + vpn.country
+                textFormat: Text.PlainText
                 color: root.foreground
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.title
@@ -228,6 +230,7 @@ Panel {
               Text {
                 Layout.fillWidth: true
                 text: vpn.statusText.toUpperCase()
+                textFormat: Text.PlainText
                 color: vpn.state === "error" || vpn.state === "warning" ? root.urgent : root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
@@ -242,6 +245,7 @@ Panel {
             visible: vpn.lastError !== ""
             width: parent.width
             text: vpn.lastError
+            textFormat: Text.PlainText
             color: root.urgent
             font.family: root.fontFamily
             font.pixelSize: Style.font.bodySmall
@@ -262,6 +266,7 @@ Panel {
             visible: vpn.serviceAvailable && vpn.accounts.length === 0
             width: parent.width
             text: "Import a SoftEther connection profile to add a country."
+            textFormat: Text.PlainText
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.body
@@ -272,6 +277,7 @@ Panel {
             visible: !vpn.serviceAvailable
             width: parent.width
             text: "Start the softethervpn-client service to load VPN profiles."
+            textFormat: Text.PlainText
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.body
@@ -324,6 +330,7 @@ Panel {
                     Text {
                       Layout.fillWidth: true
                       text: String(accountRow.account.flag || "🏳") + "  " + accountRow.account.country
+                      textFormat: Text.PlainText
                       color: root.foreground
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.body
@@ -335,6 +342,7 @@ Panel {
                       Layout.fillWidth: true
                       text: accountRow.account.statusKind === "connected" ? "Connected"
                         : (accountRow.account.statusKind === "connecting" ? "Connecting" : accountRow.account.server)
+                      textFormat: Text.PlainText
                       color: root.dim
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.caption
@@ -345,6 +353,7 @@ Panel {
                   Text {
                     visible: accountRow.selectedAccount
                     text: "✓"
+                    textFormat: Text.PlainText
                     color: root.foreground
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.body
@@ -372,6 +381,7 @@ Panel {
             visible: vpn.tunnelAddress !== ""
             width: parent.width
             text: "Tunnel address  " + vpn.tunnelAddress
+            textFormat: Text.PlainText
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption

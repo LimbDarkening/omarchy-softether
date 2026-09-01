@@ -25,8 +25,12 @@ Item {
 
   signal selectionRequested(string accountName)
 
-  readonly property string adapterName: String(setting("adapterName", "vpn_vpn"))
-  readonly property string networkProfileName: String(setting("networkProfileName", "SoftEther VPN Network"))
+  readonly property string configuredAccountName: boundedSetting("accountName", "", 128)
+  readonly property string adapterName: boundedSetting("adapterName", "vpn_vpn", 15)
+  readonly property string networkProfileName: boundedSetting("networkProfileName", "SoftEther VPN Network", 128)
+  readonly property string settingsError: Model.settingsError(
+    configuredAccountName, networkProfileName, adapterName)
+  readonly property bool settingsValid: settingsError === ""
   readonly property string controlPath: Quickshell.env("HOME") + "/.config/omarchy/plugins/io.github.limbdarkening.softether/softether-control"
   readonly property int refreshIntervalSec: boundedInt(setting("refreshIntervalSec", 10), 10, 5, 300)
   readonly property var selectedAccount: accountNamed(selectedAccountName)
@@ -40,7 +44,7 @@ Item {
   readonly property string state: Model.presentationState({
     installed: installed,
     serviceAvailable: serviceAvailable,
-    lastError: lastError,
+    lastError: settingsError || lastError,
     actionKind: actionKind,
     desiredState: desiredState,
     connecting: connectingAccount !== null,
@@ -48,6 +52,7 @@ Item {
     usable: usable
   })
   readonly property string statusText: {
+    if (!settingsValid) return settingsError
     if (!installed) return "SoftEther is not installed"
     if (!serviceAvailable) return "SoftEther client service is stopped"
     if (accounts.length === 0) return "No imported VPN profiles"
@@ -73,6 +78,13 @@ Item {
     return value === undefined || value === null ? fallback : value
   }
 
+  function boundedSetting(name, fallback, maximum) {
+    var value = String(setting(name, fallback))
+    // Return a deliberately invalid sentinel without retaining an oversized
+    // duplicate in the service model.
+    return value.length <= maximum ? value : "\n"
+  }
+
   function boundedInt(value, fallback, min, max) {
     var parsed = parseInt(String(value), 10)
     if (!isFinite(parsed)) parsed = fallback
@@ -93,7 +105,7 @@ Item {
   }
 
   function choosePreferredAccount() {
-    var configured = String(setting("accountName", ""))
+    var configured = configuredAccountName
     if (accountNamed(configured)) {
       selectedAccountName = configured
       return
@@ -104,11 +116,18 @@ Item {
   }
 
   function elide(text) {
-    var value = String(text || "").replace(/\s+/g, " ").trim()
-    return value.length > 180 ? value.substring(0, 177) + "…" : value
+    return Model.elideError(text)
   }
 
   function refresh() {
+    if (!settingsValid) {
+      refreshing = false
+      serviceAvailable = false
+      accounts = []
+      tunnelAddress = ""
+      hasVpnDefaultRoute = false
+      return
+    }
     if (!installed) {
       if (!whichProcess.running) {
         whichProcess.command = ["which", "vpncmd"]
@@ -125,24 +144,31 @@ Item {
     refreshing = true
     _accountsOutput = ""
     _accountsError = ""
-    accountsProcess.command = ["timeout", "6", "vpncmd", "localhost", "/CLIENT", "/CMD", "AccountList"]
+    accountsProcess.command = ["timeout", "--signal=TERM", "--kill-after=3s", "10s",
+      controlPath, "accounts"]
     accountsProcess.running = true
   }
 
   function refreshNetwork() {
     if (!addressProcess.running) {
       _addressOutput = ""
-      addressProcess.command = ["ip", "-j", "address", "show", "dev", adapterName]
+      addressProcess.command = ["timeout", "--signal=TERM", "--kill-after=3s", "9s",
+        controlPath, "address", adapterName]
       addressProcess.running = true
     }
     if (!routeProcess.running) {
       _routeOutput = ""
-      routeProcess.command = ["ip", "-j", "route", "show", "default"]
+      routeProcess.command = ["timeout", "--signal=TERM", "--kill-after=3s", "9s",
+        controlPath, "routes"]
       routeProcess.running = true
     }
   }
 
   function toggle() {
+    if (!settingsValid) {
+      lastError = settingsError
+      return
+    }
     if (busy || !serviceAvailable || !selectedAccount) return
     var current = activeAccount
     if (current) {
@@ -155,6 +181,10 @@ Item {
   }
 
   function selectAccount(name) {
+    if (!Model.validAccountName(name, false)) {
+      lastError = "Invalid SoftEther account name"
+      return
+    }
     var account = accountNamed(name)
     if (!account || busy) return
     var current = activeAccount
@@ -168,7 +198,13 @@ Item {
   }
 
   function runAction(kind, accountName, nextAccountName) {
-    if (actionProcess.running || !accountName) return
+    if (actionProcess.running || !accountName || !settingsValid
+        || !Model.validAccountName(accountName, false)) {
+      if (!settingsValid) lastError = settingsError
+      else if (accountName && !Model.validAccountName(accountName, false))
+        lastError = "Invalid SoftEther account name"
+      return
+    }
     actionKind = kind
     actionAccountName = accountName
     connectAfterDisconnect = String(nextAccountName || "")
@@ -176,12 +212,19 @@ Item {
     lastError = ""
     _actionOutput = ""
     _actionError = ""
-    actionProcess.command = ["timeout", "80", controlPath, kind, accountName, networkProfileName, adapterName]
+    // The forced-kill grace period covers the helper's bounded disconnect and
+    // removal of all eight possible transport routes after TERM.
+    actionProcess.command = ["timeout", "--signal=TERM", "--kill-after=70s", "100s",
+      controlPath, kind, accountName, networkProfileName, adapterName]
     actionProcess.running = true
   }
 
   Component.onCompleted: refresh()
-  onSettingsChanged: choosePreferredAccount()
+  onSettingsChanged: {
+    choosePreferredAccount()
+    if (!settingsValid) lastError = settingsError
+    else if (lastError.indexOf("Invalid ") === 0) lastError = ""
+  }
 
   Timer {
     interval: root.refreshIntervalSec * 1000
@@ -225,18 +268,18 @@ Item {
     stdout: StdioCollector {
       id: accountsStdout
       waitForEnd: true
-      onStreamFinished: root._accountsOutput = text
+      onStreamFinished: root._accountsOutput = Model.bounded(text, 65536) || ""
     }
     stderr: StdioCollector {
       id: accountsStderr
       waitForEnd: true
-      onStreamFinished: root._accountsError = text
+      onStreamFinished: root._accountsError = Model.bounded(text, 4096) || ""
     }
     onExited: function(exitCode) {
       root.refreshing = false
-      var stdout = String(accountsStdout.text || root._accountsOutput || "")
-      var stderr = String(accountsStderr.text || root._accountsError || "")
-      if (exitCode === 0) {
+      var stdout = Model.bounded(accountsStdout.text || root._accountsOutput || "", 65536)
+      var stderr = Model.bounded(accountsStderr.text || root._accountsError || "", 4096)
+      if (exitCode === 0 && stdout !== null && stderr !== null) {
         root.serviceAvailable = true
         var parsedAccounts = Model.parseAccountList(stdout)
         for (var i = 0; i < parsedAccounts.length; i++) {
@@ -267,11 +310,12 @@ Item {
     stdout: StdioCollector {
       id: addressStdout
       waitForEnd: true
-      onStreamFinished: root._addressOutput = text
+      onStreamFinished: root._addressOutput = Model.bounded(text, 32768) || ""
     }
     onExited: function(exitCode) {
-      root.tunnelAddress = exitCode === 0
-        ? Model.parseAddress(String(addressStdout.text || root._addressOutput || "")) : ""
+      var stdout = Model.bounded(addressStdout.text || root._addressOutput || "", 32768)
+      root.tunnelAddress = exitCode === 0 && stdout !== null
+        ? Model.parseAddress(stdout) : ""
     }
   }
 
@@ -282,11 +326,12 @@ Item {
     stdout: StdioCollector {
       id: routeStdout
       waitForEnd: true
-      onStreamFinished: root._routeOutput = text
+      onStreamFinished: root._routeOutput = Model.bounded(text, 32768) || ""
     }
     onExited: function(exitCode) {
-      root.hasVpnDefaultRoute = exitCode === 0
-        && Model.hasDefaultRoute(String(routeStdout.text || root._routeOutput || ""), root.adapterName)
+      var stdout = Model.bounded(routeStdout.text || root._routeOutput || "", 32768)
+      root.hasVpnDefaultRoute = exitCode === 0 && stdout !== null
+        && Model.hasDefaultRoute(stdout, root.adapterName)
     }
   }
 
@@ -297,16 +342,16 @@ Item {
     stdout: StdioCollector {
       id: actionStdout
       waitForEnd: true
-      onStreamFinished: root._actionOutput = text
+      onStreamFinished: root._actionOutput = Model.bounded(text, 65536) || ""
     }
     stderr: StdioCollector {
       id: actionStderr
       waitForEnd: true
-      onStreamFinished: root._actionError = text
+      onStreamFinished: root._actionError = Model.bounded(text, 4096) || ""
     }
     onExited: function(exitCode) {
-      var stdout = String(actionStdout.text || root._actionOutput || "")
-      var stderr = String(actionStderr.text || root._actionError || "")
+      var stdout = Model.bounded(actionStdout.text || root._actionOutput || "", 65536)
+      var stderr = Model.bounded(actionStderr.text || root._actionError || "", 4096)
       var next = root.connectAfterDisconnect
       var completedKind = root.actionKind
       root.actionKind = ""
@@ -314,9 +359,11 @@ Item {
       root.connectAfterDisconnect = ""
       root.actionStatus = ""
 
-      if (exitCode !== 0) {
+      if (exitCode !== 0 || stdout === null || stderr === null) {
         root.desiredState = -1
-        root.lastError = root.elide(stderr || stdout || "SoftEther command failed")
+        root.lastError = stdout === null || stderr === null
+          ? "SoftEther command output exceeded safe limits"
+          : root.elide(stderr || stdout || "SoftEther command failed")
         root.refresh()
         return
       }

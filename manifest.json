@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.limbdarkening.softether",
   "name": "SoftEther VPN",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "author": "LimbDarkening",
   "license": "MIT",
   "description": "Minimal SoftEther VPN shield with quick toggle and country switching.",
