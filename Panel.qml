@@ -97,38 +97,40 @@ Panel {
     function status(): string { return vpn.statusText }
   }
 
-  BarIconButton {
+  // This is a two-part control. BarIconButton normalizes its whole
+  // iconComponent to one icon's size, shrinking the shield and flag together.
+  WidgetButton {
     id: button
     anchors.fill: parent
     bar: root.bar
     interactive: false
-    slotSize: Style.space(38)
-    opticalSize: Style.space(30)
+    labelVisible: false
+    hasVisualContent: true
+    fixedWidth: vertical ? -1 : Style.space(38)
+    fixedHeight: vertical ? Style.space(38) : -1
     tooltipText: vpn.tooltipText
-    iconComponent: Component {
-      Item {
-        Row {
-          anchors.centerIn: parent
-          spacing: Style.space(3)
 
-          ShieldIcon {
-            anchors.verticalCenter: parent.verticalCenter
-            iconSize: Style.space(12)
-            color: root.iconColor
-            badgeColor: root.urgent
-            state: vpn.state
-            pulsing: vpn.connectAnimationActive
-          }
+    Row {
+      anchors.centerIn: parent
+      spacing: Style.space(3)
+      scale: button.pressScale
 
-          Text {
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.selectedFlag
-            textFormat: Text.PlainText
-            color: root.foreground
-            font.family: "Noto Color Emoji"
-            font.pixelSize: Style.space(13)
-          }
-        }
+      ShieldIcon {
+        anchors.verticalCenter: parent.verticalCenter
+        iconSize: Style.bar.iconSize
+        color: root.iconColor
+        badgeColor: root.urgent
+        state: vpn.state
+        pulsing: vpn.connectAnimationActive
+      }
+
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
+        text: root.selectedFlag
+        color: root.foreground
+        font.family: "Noto Color Emoji"
+        font.pixelSize: Style.space(13)
       }
     }
   }
